@@ -23,5 +23,6 @@ jobs:
         pwd
         echo "Directory after changing to js:"
         cd js
+        ls
         pwd
         node ./4sum.js
