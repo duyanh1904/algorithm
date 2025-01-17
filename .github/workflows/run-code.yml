@@ -1,9 +1,9 @@
-name: Run JavaScript Code
+name: Run JavaScript Tests
 
 on: [push]
 
 jobs:
-  run-code:
+  run-tests:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
@@ -14,15 +14,20 @@ jobs:
       with:
         node-version: '14'
 
-    - name: Install dependencies
-      run: npm install
+    - name: Install dependencies (if applicable)
+      run: npm install # Adjust if you use npm, yarn, or no dependencies
 
-    - name: Run code
+    - name: Run all JavaScript files
       run: |
-        echo "Current directory:"
-        pwd
-        echo "Directory after changing to js:"
+        echo "Navigating to the 'js' folder..."
         cd js
-        ls
-        pwd
-        node ./4sum.js
+        echo "Running all JavaScript files:"
+        for file in *.js; do
+          echo "Running $file"
+          node "$file"
+          if [ $? -ne 0 ]; then
+            echo "Test failed in $file"
+            exit 1
+          fi
+        done
+        echo "All files ran successfully!"
