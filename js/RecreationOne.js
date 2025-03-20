@@ -92,7 +92,3 @@ function runTests() {
 
 // Run the tests
 runTests();
-
-// Example usage
-console.log(solve(1, 250));  // [[1, 1], [42, 2500], [246, 84100]]
-console.log(solve(42, 250)); // [[42, 2500], [246, 84100]]

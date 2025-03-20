@@ -14,15 +14,6 @@ function fourSum(nums, target) {
 
       while (left < right) {
         const sum = nums[i] + nums[j] + nums[left] + nums[right]
-        console.log(
-          nums,
-          nums[i],
-          nums[j],
-          nums[left],
-          left,
-          nums[right],
-          right
-        )
 
         if (sum === target) {
           res.push([nums[i], nums[j], nums[left], nums[right]])

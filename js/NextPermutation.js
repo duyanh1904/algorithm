@@ -35,50 +35,102 @@
 // 0 <= nums[i] <= 100
 
 function testNextPermutation() {
+    let testResults = [];
+    let passedCount = 0;
+    let totalTests = 6;
+
     // Test case 1: [1,2,3] -> [1,3,2]
     let nums1 = [1,2,3];
     let expected1 = [1,3,2];
     const r1 = nextPermutation(nums1);
-    console.assert(r1.join() === expected1.join(),
-        `Test 1 Failed: Expected ${expected1}, got ${r1}`);
+    let test1Passed = r1.join() === expected1.join();
+    testResults.push({
+        test: 1,
+        passed: test1Passed,
+        expected: expected1,
+        got: r1
+    });
+    if (test1Passed) passedCount++;
 
     // Test case 2: [3,2,1] -> [1,2,3]
     let nums2 = [3,2,1];
     let expected2 = [1,2,3];
     const r2 = nextPermutation(nums2);
-    console.assert(r2.join() === expected2.join(),
-        `Test 2 Failed: Expected ${expected2}, got ${r2}`);
+    let test2Passed = r2.join() === expected2.join();
+    testResults.push({
+        test: 2,
+        passed: test2Passed,
+        expected: expected2,
+        got: r2
+    });
+    if (test2Passed) passedCount++;
 
     // Test case 3: [1,1,5] -> [1,5,1]
     let nums3 = [1,1,5];
     let expected3 = [1,5,1];
     const r3 = nextPermutation(nums3);
-    console.assert(r3.join() === expected3.join(),
-        `Test 3 Failed: Expected ${expected3}, got ${r3}`);
+    let test3Passed = r3.join() === expected3.join();
+    testResults.push({
+        test: 3,
+        passed: test3Passed,
+        expected: expected3,
+        got: r3
+    });
+    if (test3Passed) passedCount++;
 
-    // Additional test cases
     // Test case 4: Single element [1] -> [1]
     let nums4 = [1];
     let expected4 = [1];
     const r4 = nextPermutation(nums4);
-    console.assert(r4.join() === expected4.join(),
-        `Test 4 Failed: Expected ${expected4}, got ${r4}`);
+    let test4Passed = r4.join() === expected4.join();
+    testResults.push({
+        test: 4,
+        passed: test4Passed,
+        expected: expected4,
+        got: r4
+    });
+    if (test4Passed) passedCount++;
 
     // Test case 5: Two elements [1,2] -> [2,1]
     let nums5 = [1,2];
     let expected5 = [2,1];
     const r5 = nextPermutation(nums5);
-    console.assert(r5.join() === expected5.join(),
-        `Test 5 Failed: Expected ${expected5}, got ${r5}`);
+    let test5Passed = r5.join() === expected5.join();
+    testResults.push({
+        test: 5,
+        passed: test5Passed,
+        expected: expected5,
+        got: r5
+    });
+    if (test5Passed) passedCount++;
 
     // Test case 6: Duplicate elements [1,3,2] -> [2,1,3]
     let nums6 = [1,3,2];
     let expected6 = [2,1,3];
     const r6 = nextPermutation(nums6);
-    console.assert(r6.join() === expected6.join(),
-        `Test 6 Failed: Expected ${expected6}, got ${r6}`);
+    let test6Passed = r6.join() === expected6.join();
+    testResults.push({
+        test: 6,
+        passed: test6Passed,
+        expected: expected6,
+        got: r6
+    });
+    if (test6Passed) passedCount++;
 
-    console.log("All tests completed");
+    // Print results
+    console.log("\nTest Results:");
+    testResults.forEach(result => {
+        if (result.passed) {
+            console.log(`Test ${result.test}: PASSED`);
+        } else {
+            console.log(`Test ${result.test}: FAILED - Expected ${result.expected}, got ${result.got}`);
+        }
+    });
+
+    console.log(`\nSummary: ${passedCount} out of ${totalTests} tests passed`);
+    console.log(passedCount === totalTests ?
+        "All tests passed successfully!" :
+        "Some tests failed. Please check the implementation.");
 }
 
 function nextPermutation(nums) {
