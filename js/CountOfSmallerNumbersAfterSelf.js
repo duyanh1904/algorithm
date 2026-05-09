@@ -67,3 +67,87 @@ function countSmaller(nums) {
   console.log("\n=== KẾT THÚC THUẬT TOÁN ===");
   return result;
 }
+
+// ================= HỆ THỐNG UNIT TEST HỌC THUẬT CAO =================
+
+function runTests() {
+  console.log("\n🧪 BẮT ĐẦU CHẠY UNIT TEST: FENWICK TREE (BINARY INDEXED TREE)\n");
+
+  const isMatch = (arr1, arr2) => {
+    if (arr1.length !== arr2.length) return false;
+    for (let i = 0; i < arr1.length; i++) {
+      if (arr1[i] !== arr2[i]) return false;
+    }
+    return true;
+  };
+
+  const testCases = [
+    {
+      description: "1. Ví dụ kinh điển",
+      nums: [5, 2, 6, 1],
+      expected: [2, 1, 1, 0],
+      reason: "Đủ các trường hợp lớn/nhỏ đảo lộn."
+    },
+    {
+      description: "2. Mảng chứa số âm và số rất lớn (Spike Data)",
+      nums: [1000000, -1000000, 5, 5, -2],
+      expected: [4, 0, 1, 1, 0],
+      reason: "Kiểm tra kỹ thuật Nén tọa độ (Coordinate Compression) xem có hoạt động chính xác với gap cực lớn không."
+    },
+    {
+      description: "3. Mảng đã được sắp xếp GIẢM DẦN (Worst Case cho Bruteforce)",
+      nums: [5, 4, 3, 2, 1],
+      expected: [4, 3, 2, 1, 0],
+      reason: "Mọi phần tử bên phải đều nhỏ hơn nó. Mọi truy vấn BIT đều phải cộng dồn tối đa."
+    },
+    {
+      description: "4. Mảng đã được sắp xếp TĂNG DẦN",
+      nums: [1, 2, 3, 4, 5],
+      expected: [0, 0, 0, 0, 0],
+      reason: "Không có phần tử nào nhỏ hơn ở bên phải. BIT query phải luôn trả về 0."
+    },
+    {
+      description: "5. Mảng chứa các giá trị TRÙNG LẶP liên tục",
+      nums: [3, 3, 3, 3],
+      expected: [0, 0, 0, 0],
+      reason: "Bài toán yêu cầu 'nhỏ hơn' chứ không phải 'nhỏ hơn hoặc bằng'. Các rank bằng nhau không được đếm."
+    },
+    {
+      description: "6. Mảng rỗng hoặc 1 phần tử",
+      nums: [99],
+      expected: [0],
+      reason: "Kiểm tra giới hạn thấp nhất. Code không được văng lỗi undefined."
+    }
+  ];
+
+  let passedCount = 0;
+
+  testCases.forEach((tc, index) => {
+    // Tắt log khi chạy hàng loạt
+    const originalLog = console.log;
+    console.log = () => {}; 
+    
+    const actual = countSmaller(tc.nums);
+    
+    console.log = originalLog; 
+
+    if (isMatch(actual, tc.expected)) {
+      console.log(`✅ TEST ${index + 1} PASSED: ${tc.description}`);
+      passedCount++;
+    } else {
+      console.error(`❌ TEST ${index + 1} FAILED: ${tc.description}`);
+      console.error(`   👉 Input:    [${tc.nums}]`);
+      console.error(`   🎯 Expected: [${tc.expected}]`);
+      console.error(`   🚨 Actual:   [${actual}]`);
+    }
+  });
+
+  console.log("==================================================");
+  if (passedCount === testCases.length) {
+    console.log(`🎉 TẤT CẢ ${passedCount}/${testCases.length} TEST PASSED! Cấu trúc Binary Indexed Tree vận hành hoàn hảo với độ phức tạp Bitwise.`);
+  } else {
+    console.log(`⚠️ Có lỗi trong khâu xử lý Bit. Cần xem lại!`);
+  }
+}
+
+runTests();
