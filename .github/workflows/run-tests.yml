@@ -1,0 +1,62 @@
+name: Run JavaScript Tests and Auto-LeetCode
+
+on:
+  push:
+    branches: [ main, master ]
+  schedule:
+    # 10:00 UTC tương ứng với 17:00 (5 PM) giờ Việt Nam (GMT+7)
+    - cron: '0 10 * * *'
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    
+    # Cấp quyền ghi để GITHUB_TOKEN có thể đẩy code lên repo
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+
+    - name: Run Crawler Bot
+      run: node crawler.js
+
+    - name: Run all JavaScript files
+      run: |
+        echo "Navigating to the 'js' folder..."
+        cd js
+        for file in *.js; do
+          echo "Running $file"
+          node "$file"
+          if [ $? -ne 0 ]; then
+            echo "Test failed in $file"
+            exit 1
+          fi
+        done
+
+    - name: Commit and Push changes
+      env:
+        # Sử dụng token có sẵn của GitHub Actions để xác thực quyền ghi
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Tự động lấy Username của chủ sở hữu Repository
+        # Tự động cấu hình Email ẩn danh của GitHub để bảo mật email cá nhân mà vẫn tính "Chấm xanh"
+        git config --global user.name "${{ github.repository_owner }}"
+        git config --global user.email "${{ github.repository_owner }}@users.noreply.github.com"
+        
+        git add js/
+        
+        # Kiểm tra xem có file bài giải mới nào được tạo ra không
+        if ! git diff --cached --quiet; then
+          git commit -m "Feat: Auto-generated LeetCode Daily Challenge template with Unit Tests"
+          # Đẩy code lên bằng GITHUB_TOKEN thông qua cơ chế mật định của REST API / GraphQL
+          git push
+        else
+          echo "Không có bài mới nào được tạo thêm hôm nay."
+        fi
