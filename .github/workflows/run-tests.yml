@@ -4,14 +4,12 @@ on:
   push:
     branches: [ main, master ]
   schedule:
-    # 10:00 UTC tương ứng với 17:00 (5 PM) giờ Việt Nam (GMT+7)
-    - cron: '0 10 * * *'
+    - cron: '0 10 * * *' # Chạy vào lúc 17:00 giờ Việt Nam hằng ngày
 
 jobs:
   run-tests:
     runs-on: ubuntu-latest
     
-    # Cấp quyền ghi để GITHUB_TOKEN có thể đẩy code lên repo
     permissions:
       contents: write
 
@@ -24,39 +22,43 @@ jobs:
       with:
         node-version: '16'
 
-    - name: Run Crawler Bot
+    # Bước 1: Khởi chạy Unit Test toàn bộ những file cũ hiện tại xem có đạt không
+    - name: Run Unit Tests for existing solutions
+      run: |
+        echo "Kiểm tra và chạy các bài toán hiện có..."
+        if [ -d "js" ]; then
+          cd js
+          for file in *.js; do
+            echo "Đang kiểm thử file: $file"
+            node "$file"
+            if [ $? -ne 0 ]; then
+              echo "❌ Phát hiện lỗi kiểm thử tại file $file!"
+              exit 1
+            fi
+          done
+        else
+          echo "Thư mục js chưa tồn tại. Sẽ được tạo ở bước sau."
+        fi
+
+    # Bước 2: Kích hoạt Bot tự động cào bài toán Daily của hôm nay về
+    - name: Fetch today LeetCode Daily Challenge
       run: node crawler.js
 
-    - name: Run all JavaScript files
-      run: |
-        echo "Navigating to the 'js' folder..."
-        cd js
-        for file in *.js; do
-          echo "Running $file"
-          node "$file"
-          if [ $? -ne 0 ]; then
-            echo "Test failed in $file"
-            exit 1
-          fi
-        done
-
-    - name: Commit and Push changes
+    # Bước 3: Tự động dùng biến môi trường định danh tác giả và đẩy code lên GitHub
+    - name: Commit and Push new question template
       env:
-        # Sử dụng token có sẵn của GitHub Actions để xác thực quyền ghi
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        # Tự động lấy Username của chủ sở hữu Repository
-        # Tự động cấu hình Email ẩn danh của GitHub để bảo mật email cá nhân mà vẫn tính "Chấm xanh"
         git config --global user.name "${{ github.repository_owner }}"
         git config --global user.email "${{ github.repository_owner }}@users.noreply.github.com"
         
+        # Thêm file mới vào vùng bốc xếp (Staging area)
         git add js/
         
-        # Kiểm tra xem có file bài giải mới nào được tạo ra không
+        # Kiểm tra xem hôm nay có phát sinh file mới nào không để tránh commit trống
         if ! git diff --cached --quiet; then
-          git commit -m "Feat: Auto-generated LeetCode Daily Challenge template with Unit Tests"
-          # Đẩy code lên bằng GITHUB_TOKEN thông qua cơ chế mật định của REST API / GraphQL
+          git commit -m "Feat: Auto-scraped LeetCode Daily with functional Test Cases"
           git push
         else
-          echo "Không có bài mới nào được tạo thêm hôm nay."
+          echo "Không có bài mới nào được cập nhật trong ngày hôm nay."
         fi
