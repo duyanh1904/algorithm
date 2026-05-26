@@ -4,8 +4,8 @@ on:
   push:
     branches: [ main, master ]
   schedule:
-    - cron: '0 10 * * *' # Chạy vào lúc 17:00 giờ Việt Nam hằng ngày
-
+    # 18:00 UTC tương ứng với 01:00 (1 AM) sáng ngày hôm sau theo giờ Việt Nam (GMT+7)
+    - cron: '0 18 * * *'
 jobs:
   run-tests:
     runs-on: ubuntu-latest
