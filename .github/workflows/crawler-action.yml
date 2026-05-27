@@ -1,10 +1,7 @@
-name: Run JavaScript Tests and Auto-LeetCode
+name: Crawler LeetCode solution
 
 on:
-  push:
-    branches: [ main, master ]
   schedule:
-    # 18:00 UTC tương ứng với 01:00 (1 AM) sáng ngày hôm sau theo giờ Việt Nam (GMT+7)
     - cron: '0 18 * * *'
 jobs:
   run-tests:
@@ -57,7 +54,7 @@ jobs:
         
         # Kiểm tra xem hôm nay có phát sinh file mới nào không để tránh commit trống
         if ! git diff --cached --quiet; then
-          git commit -m "Feat: Auto-scraped LeetCode Daily with functional Test Cases"
+          git commit -m "feat: Auto-scraped LeetCode Daily with functional Test Cases"
           git push
         else
           echo "Không có bài mới nào được cập nhật trong ngày hôm nay."
