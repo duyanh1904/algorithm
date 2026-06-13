@@ -71,4 +71,43 @@ const runTests = () => {
             expected: [[1, 2, 3], [1, 2], [1, 3], [1], [2, 3], [2], [3], []]
         },
         {
-            name: "Ví dụ 2: Mảng chỉ
+            name: "Ví dụ 2: Mảng chỉ chứa duy nhất 1 phần tử",
+            input: [0],
+            expected: [[0], []]
+        }
+    ];
+
+    let passedCount = 0;
+    console.log(`=== RUNNING TESTS FOR: Subsets ===`);
+
+    testCases.forEach((test, index) => {
+        let actual = subsets(test.input);
+
+        // Hàm hỗ trợ chuẩn hóa cấu trúc mảng để so khớp nội dung không quan trọng thứ tự dòng
+        const normalize = (matrix) => {
+            return matrix.map(row => row.sort((a, b) => a - b))
+                         .sort((a, b) => b.length - a.length || a.join(',').localeCompare(b.join(',')));
+        };
+
+        const isPassed = JSON.stringify(normalize(actual)) === JSON.stringify(normalize(test.expected));
+
+        if (isPassed) {
+            console.log(`✅ Test #${index + 1} PASSED: ${test.name}`);
+            passedCount++;
+        } else {
+            console.error(`❌ Test #${index + 1} FAILED: ${test.name}`);
+            console.error(`   - Expected:`, test.expected);
+            console.error(`   - Actual:  `, actual);
+        }
+    });
+
+    console.log("-----------------------------------------");
+    if (passedCount !== testCases.length) {
+        console.error(`Kết quả: Thất bại ${testCases.length - passedCount}/${testCases.length} bài test.`);
+        process.exit(1);
+    } else {
+        console.log(`Kết quả: Tuyệt vời! Vượt qua tất cả ${passedCount}/${testCases.length} bài test.`);
+    }
+};
+
+runTests();
