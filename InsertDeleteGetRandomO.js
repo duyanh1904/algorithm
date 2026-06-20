@@ -1,7 +1,7 @@
 /**
  * LeetCode Daily Challenge
  * ID: 380
- * Title: Insert Delete GetRandom O(1)
+ * Title: Insert Delete GetRandom O(1)sss
  * Difficulty: Medium
  * URL: https://leetcode.com/problems/insert-delete-getrandom-o1/
  */
