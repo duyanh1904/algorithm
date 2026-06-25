@@ -1,66 +1,157 @@
-const fs = require('fs');
+const fs = require('fs').promises;
 const https = require('https');
 const path = require('path');
+const { execSync } = require('child_process');
 
-// Hàm gửi request POST (GraphQL) lên LeetCode
-const postRequest = (url, data) => {
+// Configuration
+const CONFIG = {
+    GRAPHQL_URL: 'https://leetcode.com/graphql',
+    OUTPUT_DIR: 'js',
+    USER_AGENT: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    TIMEOUT: 30000,
+    MAX_RETRIES: 3,
+    RETRY_DELAY: 1000
+};
+
+// Enhanced HTTP request with retry logic and timeout
+const postRequest = (url, data, retries = CONFIG.MAX_RETRIES) => {
     return new Promise((resolve, reject) => {
-        const urlObj = new URL(url);
-        const options = {
-            hostname: urlObj.hostname,
-            path: urlObj.pathname + urlObj.search,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(JSON.stringify(data)),
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            }
+        const makeRequest = (attempt) => {
+            const urlObj = new URL(url);
+            const jsonData = JSON.stringify(data);
+            
+            const options = {
+                hostname: urlObj.hostname,
+                path: urlObj.pathname + urlObj.search,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(jsonData),
+                    'User-Agent': CONFIG.USER_AGENT,
+                    'Accept': 'application/json',
+                    'Accept-Encoding': 'gzip, deflate, br'
+                },
+                timeout: CONFIG.TIMEOUT
+            };
+
+            const req = https.request(options, (res) => {
+                let responseData = '';
+                
+                res.on('data', (chunk) => {
+                    responseData += chunk;
+                });
+                
+                res.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(responseData);
+                        if (parsed.errors) {
+                            reject(new Error(`GraphQL Error: ${JSON.stringify(parsed.errors)}`));
+                        } else {
+                            resolve(parsed);
+                        }
+                    } catch (e) {
+                        reject(new Error(`Failed to parse response: ${e.message}`));
+                    }
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Request timeout'));
+            });
+
+            req.on('error', (err) => {
+                if (attempt < retries) {
+                    console.log(`Retry ${attempt + 1}/${retries} after error: ${err.message}`);
+                    setTimeout(() => makeRequest(attempt + 1), CONFIG.RETRY_DELAY);
+                } else {
+                    reject(new Error(`Request failed after ${retries} attempts: ${err.message}`));
+                }
+            });
+
+            req.write(jsonData);
+            req.end();
         };
-        const req = https.request(options, (res) => {
-            let responseData = '';
-            res.on('data', (chunk) => { responseData += chunk; });
-            res.on('end', () => resolve(JSON.parse(responseData)));
-        });
-        req.on('error', (err) => reject(err));
-        req.write(JSON.stringify(data));
-        req.end();
+
+        makeRequest(0);
     });
 };
 
-// Hàm trích xuất tự động các Ví dụ (Examples) từ đề bài để làm Test Cases
+// Improved test case extraction with better regex patterns
 const parseTestCasesFromContent = (htmlContent) => {
     const testCases = [];
-    // Tìm các đoạn text nằm trong thẻ <pre> (Nơi LeetCode chứa Input/Output mẫu)
-    const preRegex = /<pre>([\s\S]*?)<\/pre>/g;
-    let match;
+    
+    // Clean HTML and extract pre content
+    const cleanHtml = htmlContent.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+    
+    // Pattern for example blocks
+    const examplePattern = /Example\s*\d+:.*?Input:\s*([\s\S]*?)(?=Output:)/gi;
+    const outputPattern = /Output:\s*([\s\S]*?)(?=(Example\s*\d+:|Explanation:|$))/gi;
+    
+    let exampleMatch;
     let index = 1;
-
-    while ((match = preRegex.exec(htmlContent)) !== null) {
-        const preText = match[1].replace(/<[^>]*>/g, ''); // Xóa bỏ các thẻ HTML thừa
+    
+    // Try to find examples with Input/Output pattern
+    const inputMatches = [...cleanHtml.matchAll(/Input:\s*([\s\S]*?)(?=Output:|$)/gi)];
+    const outputMatches = [...cleanHtml.matchAll(/Output:\s*([\s\S]*?)(?=Example\s*\d+:|Explanation:|$)/gi)];
+    
+    // Process matches in pairs
+    const minLength = Math.min(inputMatches.length, outputMatches.length);
+    for (let i = 0; i < minLength; i++) {
+        const inputStr = inputMatches[i][1].trim();
+        const outputStr = outputMatches[i][1].trim();
         
-        // Dùng Regex bóc tách dòng Input và Output
-        const inputMatch = preText.match(/Input:\s*([\s\S]*?)(?=\nOutput:|$)/);
-        const outputMatch = preText.match(/Output:\s*([\s\S]*?)(?=\nExplanation:|\n\s*|$)/);
-
-        if (inputMatch && outputMatch) {
-            let inputStr = inputMatch[1].trim();
-            let outputStr = outputMatch[1].trim();
-
+        if (inputStr && outputStr) {
             testCases.push({
-                name: `Ví dụ ${index++}`,
+                name: `Example ${index++}`,
                 rawInput: inputStr,
                 rawOutput: outputStr
             });
         }
     }
+    
+    // If no examples found, try alternative extraction
+    if (testCases.length === 0) {
+        const codeBlocks = htmlContent.match(/<pre>([\s\S]*?)<\/pre>/g) || [];
+        let tempInput = null;
+        let tempOutput = null;
+        
+        for (const block of codeBlocks) {
+            const cleanBlock = block.replace(/<[^>]*>/g, '').trim();
+            
+            if (cleanBlock.includes('Input:')) {
+                const inputPart = cleanBlock.match(/Input:\s*([\s\S]*?)(?=Output:|$)/);
+                if (inputPart) tempInput = inputPart[1].trim();
+            }
+            
+            if (cleanBlock.includes('Output:')) {
+                const outputPart = cleanBlock.match(/Output:\s*([\s\S]*?)(?=Explanation:|$)/);
+                if (outputPart) tempOutput = outputPart[1].trim();
+            }
+            
+            if (tempInput && tempOutput) {
+                testCases.push({
+                    name: `Example ${index++}`,
+                    rawInput: tempInput,
+                    rawOutput: tempOutput
+                });
+                tempInput = null;
+                tempOutput = null;
+            }
+        }
+    }
+    
     return testCases;
 };
 
-// Hàm xử lý chuỗi đầu vào/đầu ra để chuyển về dạng Object/Mảng/Ký tự trong JS
+// Enhanced value formatting with better type detection
 const formatJsValue = (valStr) => {
-    if (!valStr) return "undefined";
-    // Nếu có dạng gán biến nhiều tham số kiểu "s = 'abc', minJump = 2"
-    if (valStr.includes('=')) {
+    if (!valStr || valStr === 'null') return 'null';
+    if (valStr === 'true' || valStr === 'false') return valStr;
+    if (!isNaN(valStr) && valStr.trim() !== '') return valStr;
+    
+    // Handle multiple parameters with assignment
+    if (valStr.includes('=') && !valStr.includes('==')) {
         const objResult = {};
         const pairs = valStr.split(/,\s*(?=[a-zA-Z0-9_]+\s*=)/);
         pairs.forEach(p => {
@@ -68,21 +159,95 @@ const formatJsValue = (valStr) => {
             if (parts.length >= 2) {
                 const key = parts[0].trim();
                 const val = parts.slice(1).join('=').trim();
-                try { objResult[key] = JSON.parse(val.replace(/'/g, '"')); } 
-                catch { objResult[key] = val; }
+                try {
+                    objResult[key] = JSON.parse(val.replace(/'/g, '"'));
+                } catch {
+                    objResult[key] = val;
+                }
             }
         });
-        return JSON.stringify(objResult, null, 4);
+        return JSON.stringify(objResult);
     }
-    // Trường hợp là một giá trị đơn lẻ (mảng, số, chuỗi)
-    try { return JSON.stringify(JSON.parse(valStr.replace(/'/g, '"')), null, 4); } 
-    catch { return `"${valStr}"`; }
+    
+    // Handle arrays and objects
+    try {
+        return JSON.stringify(JSON.parse(valStr.replace(/'/g, '"')));
+    } catch {
+        // Handle strings
+        return `"${valStr.replace(/"/g, '\\"')}"`;
+    }
 };
 
+// Generate test runner with better error handling
+const generateTestRunner = (functionCode, mainFunctionName, testCases, title) => {
+    let testCasesCodeStr = testCases.map((t, i) => {
+        return `    {\n        name: "${t.name}",\n        input: ${formatJsValue(t.rawInput)},\n        expected: ${formatJsValue(t.rawOutput)}\n    }`;
+    }).join(',\n');
+
+    return `/**
+ * LeetCode Daily Challenge
+ * Title: ${title}
+ * Generated: ${new Date().toISOString().split('T')[0]}
+ * URL: https://leetcode.com/problems/${title.toLowerCase().replace(/ /g, '-')}/
+ */
+
+${functionCode}
+
+// ==========================================
+// TEST RUNNER
+// ==========================================
+const runTests = () => {
+    const testCases = [
+${testCasesCodeStr}
+    ];
+
+    console.log(\`\\n🧪 Running tests for: ${title}\\n\`);
+    let passed = 0;
+    let failed = 0;
+
+    testCases.forEach((test, index) => {
+        try {
+            let result;
+            if (test.input && typeof test.input === 'object' && !Array.isArray(test.input)) {
+                result = ${mainFunctionName}(...Object.values(test.input));
+            } else {
+                result = ${mainFunctionName}(test.input);
+            }
+
+            const passed_ = JSON.stringify(result) === JSON.stringify(test.expected);
+            
+            if (passed_) {
+                console.log(\`✅ Test \${index + 1}: \${test.name}\`);
+                passed++;
+            } else {
+                console.log(\`❌ Test \${index + 1}: \${test.name}\`);
+                console.log(\`   Expected: \${JSON.stringify(test.expected)}\`);
+                console.log(\`   Got:      \${JSON.stringify(result)}\`);
+                failed++;
+            }
+        } catch (error) {
+            console.log(\`💥 Test \${index + 1}: \${test.name} - Error\`);
+            console.log(\`   \${error.message}\`);
+            failed++;
+        }
+    });
+
+    console.log(\`\\n📊 Results: \${passed} passed, \${failed} failed\`);
+    return failed === 0;
+};
+
+// Run tests if this file is executed directly
+if (require.main === module) {
+    const success = runTests();
+    process.exit(success ? 0 : 1);
+}
+
+module.exports = { ${mainFunctionName} };
+`;
+};
+
+// Main function with better error handling and GitHub integration
 const runBot = async () => {
-    const graphqlUrl = 'https://leetcode.com/graphql';
-    
-    // Query lấy thông tin chi tiết bài Daily bao gồm cả nội dung và code mẫu JavaScript
     const query = {
         query: `
             query questionOfToday {
@@ -104,108 +269,81 @@ const runBot = async () => {
     };
 
     try {
-        console.log("Đang cào dữ liệu giải thuật từ LeetCode...");
-        const response = await postRequest(graphqlUrl, query);
+        console.log('🔄 Fetching LeetCode daily challenge...');
+        const response = await postRequest(CONFIG.GRAPHQL_URL, query);
+        
+        if (!response.data?.activeDailyCodingChallengeQuestion?.question) {
+            throw new Error('Invalid response structure from LeetCode');
+        }
+
         const question = response.data.activeDailyCodingChallengeQuestion.question;
+        const { questionFrontendId: id, title, titleSlug: slug, difficulty, content, codeSnippets } = question;
 
-        const id = question.questionFrontendId;
-        const title = question.title;
-        const slug = question.titleSlug;
-        const difficulty = question.difficulty;
+        // Get JavaScript snippet
+        const jsSnippet = codeSnippets.find(snip => snip.lang === 'JavaScript') || 
+                         codeSnippets.find(snip => snip.lang === 'Javascript');
         
-        // Lấy đoạn code mẫu JavaScript mà LeetCode cung cấp sẵn
-        const jsSnippet = question.codeSnippets.find(snip => snip.lang === 'JavaScript');
-        let functionCode = jsSnippet ? jsSnippet.code : `const solveLeetCodeQuestion = (input) => { return input; };`;
-
-        // Đổi tên hàm từ mẫu của LeetCode thành hàm thống nhất hoặc giữ nguyên tùy bạn
-        // Ở đây ta trích xuất tên hàm gốc của LeetCode để tí nữa Unit Test gọi chính xác tên đó
-        const functionNameMatch = functionCode.match(/(?:var|const|let)\s+([a-zA-Z0-9_]+)\s*=/);
-        const mainFunctionName = functionNameMatch ? functionNameMatch[1] : "solveLeetCodeQuestion";
-
-        // Tự động bóc tách sinh Test Cases
-        const parsedTests = parseTestCasesFromContent(question.content);
+        let functionCode = jsSnippet?.code || 'function solve() { return null; }';
         
-        // Xây dựng chuỗi văn bản cho mảng testCases trong file JS
-        let testCasesCodeStr = "";
-        parsedTests.forEach(t => {
-            testCasesCodeStr += `        {\n            name: "${t.name}",\n            input: ${formatJsValue(t.rawInput)},\n            expected: ${formatJsValue(t.rawOutput)}\n        },\n`;
-        });
+        // Extract function name
+        const functionNameMatch = functionCode.match(/(?:var|const|let|function)\s+([a-zA-Z0-9_]+)\s*[=\(]/);
+        const mainFunctionName = functionNameMatch ? functionNameMatch[1] : 'solve';
 
-        // Tạo cấu trúc File hoàn chỉnh tự động
-        const fileContent = `/**
- * LeetCode Daily Challenge
- * ID: ${id}
- * Title: ${title}
- * Difficulty: ${difficulty}
- * URL: https://leetcode.com/problems/${slug}/
- */
-
-${functionCode}
-
-// ==========================================
-// TRÌNH CHẠY UNIT TEST TỰ ĐỘNG BẰNG JS THUẦN
-// ==========================================
-const runTests = () => {
-    const testCases = [
-${testCasesCodeStr}
-    ];
-
-    let passedCount = 0;
-    console.log(\`=== RUNNING TESTS FOR: ${title} ===\`);
-
-    testCases.forEach((test, index) => {
-        let actual;
-        // Kiểm tra xem input là một Object nhiều tham số hay chỉ là một giá trị đơn lẻ
-        if (test.input && typeof test.input === 'object' && !Array.isArray(test.input)) {
-            // Truyền các thuộc tính của object làm các đối số tương ứng của hàm
-            actual = ${mainFunctionName}(...Object.values(test.input));
+        // Parse test cases
+        const testCases = parseTestCasesFromContent(content);
+        
+        if (testCases.length === 0) {
+            console.warn('⚠️ No test cases found in problem description');
         } else {
-            actual = ${mainFunctionName}(test.input);
+            console.log(`✅ Found ${testCases.length} test cases`);
         }
 
-        // Hỗ trợ so sánh cả mảng hoặc object bằng cách chuyển về chuỗi JSON
-        const isPassed = JSON.stringify(actual) === JSON.stringify(test.expected);
+        // Generate file content
+        const fileContent = generateTestRunner(functionCode, mainFunctionName, testCases, title);
+        
+        // Create output directory
+        const outputDir = path.join(__dirname, CONFIG.OUTPUT_DIR);
+        await fs.mkdir(outputDir, { recursive: true });
 
-        if (isPassed) {
-            console.log(\`✅ Test #\${index + 1} PASSED: \${test.name}\`);
-            passedCount++;
-        } else {
-            console.error(\`❌ Test #\${index + 1} FAILED: \${test.name}\`);
-            console.error(\`   - Expected:\`, test.expected);
-            console.error(\`   - Actual:\`, actual);
-        }
-    });
-
-    console.log("-----------------------------------------");
-    if (passedCount !== testCases.length) {
-        console.error(\`Kết quả: Thất bại \${testCases.length - passedCount}/\${testCases.length} bài test.\`);
-        // Chú ý: Ta không exit(1) ở đây vì file mới cào về chưa có logic giải thuật bên trong (đang rỗng) 
-        // nên test mẫu chắc chắn sẽ fail, tránh làm sập luồng GitHub Actions khi cào bài mới.
-    } else {
-        console.log(\`Kết quả: Tuyệt vời! Vượt qua tất cả \${passedCount}/\${testCases.length} bài test.\`);
-    }
-};
-
-runTests();
-`;
-
-        const outputDir = path.join(__dirname, 'js');
-        if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
-
-        const fileName = `${id.padStart(4, '0')}_${slug.replace(/-/g, '_')}.js`;
+        // Generate filename
+        const paddedId = id.padStart(4, '0');
+        const slugifiedTitle = slug.replace(/-/g, '_');
+        const fileName = `${paddedId}_${slugifiedTitle}.js`;
         const filePath = path.join(outputDir, fileName);
 
-        if (!fs.existsSync(filePath)) {
-            fs.writeFileSync(filePath, fileContent, 'utf-8');
-            console.log(`🎯 Đã tự động sinh file hoàn chỉnh: ${fileName}`);
-        } else {
-            console.log(`⚠️ Bài hôm nay đã được tạo từ trước.`);
+        // Check if file exists
+        try {
+            await fs.access(filePath);
+            console.log(`⚠️ File already exists: ${fileName}`);
+        } catch {
+            await fs.writeFile(filePath, fileContent, 'utf-8');
+            console.log(`✅ Created: ${fileName}`);
+            
+            // Optional: Git operations if in a git repo
+            try {
+                execSync(`git add "${filePath}"`, { stdio: 'pipe' });
+                console.log(`📝 Added to git staging`);
+            } catch (gitError) {
+                // Not in git repo, skip
+            }
         }
 
+        console.log(`\n📋 Problem: ${id}. ${title} (${difficulty})`);
+        console.log(`🔗 https://leetcode.com/problems/${slug}/`);
+
     } catch (error) {
-        console.error("Lỗi vận hành hệ thống:", error);
-        process.exit(1);
+        console.error('❌ Error:', error.message);
+        if (process.env.GITHUB_ACTIONS) {
+            console.error('💥 GitHub Actions: Failing build due to error');
+            process.exit(1);
+        }
+        throw error;
     }
 };
 
-runBot();
+// Run if executed directly
+if (require.main === module) {
+    runBot().catch(() => process.exit(1));
+}
+
+module.exports = { runBot, postRequest, parseTestCasesFromContent };
