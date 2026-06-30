@@ -8,7 +8,7 @@
  * Context: Trong Azure, mỗi Region có dung lượng tài nguyên giới hạn (CPU/RAM).
  * Các Subnet cần được cấp phát vào đúng 1 Region nhất định.
  * Kiểm tra xem có thể xếp tất cả subnetRequirements vào các regionCapacities
- * mà không vượt quá dung lượng của từng Region hay không.
+ * mà không vượt quá dung lượng của từng Region hay không. edit
  */
 
 /**
